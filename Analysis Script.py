@@ -33,6 +33,7 @@ os.chdir('/Users/shelbygolden/Desktop/Life/Personal/College/Masters/Johns Hopkin
 
 
 # Packages for the rest of the script
+import numpy as np
 from Bio import SeqIO
     # Install BioPython https://biopython.org/wiki/Packages
     # https://biopython.org/docs/1.75/api/Bio.Seq.html
@@ -99,8 +100,8 @@ def regex_aa(list_change, protein_seq):
 
 def parse_protein(protein):
     """
-    Create candidate, plausible sequence parsing based on the 4.1. Protein structural g
-    raph for β-helix in the topic paper Liu et al 2006
+    Create candidate, plausible sequence parsing based on the 4.1. Protein structural
+    graph for β-helix in the topic paper Liu et al 2006
     """
     fin_segments = {}
     for j in range(len(spacing)):
@@ -166,14 +167,28 @@ def regex_all_seg(protein_seg):
 ##########################################################
 ##########################################################
 ## import sequences and segmentation
-pdb_1DBG = import_seq("PDB FASTA Files/rcsb_pdb_1DBG.fasta")
 
+# Known to have a right-handed beta-helix
+pdb_1DBG = import_seq("PDB FASTA Files/rcsb_pdb_1DBG.fasta")
+pdb_1DAB = import_seq("PDB FASTA Files/rcsb_pdb_1DAB.fasta")
+pdb_1EA0 = import_seq("PDB FASTA Files/rcsb_pdb_1EA0.fasta")
+pdb_1QJV = import_seq("PDB FASTA Files/rcsb_pdb_1QJV.fasta")
+pdb_1TYU = import_seq("PDB FASTA Files/rcsb_pdb_1TYU.fasta")
+
+
+# Predicted to have a beta-helix by UNIPROT
 
 
 
 ##########################################################
 ## segmentation
 """
+Section 4.1. Protein structural graph for β-helix in the topic paper 
+Liu et al 2006 has notations about restrictions for the length for some of the
+components for the fold segments. Arbitrarily, s-I is set to around 10
+to allow for some preceeding and ending s-I tails on the sequence folding.
+
+
 Patern: SI-B23-T3-B1-T1  -  B23-T3-B1-T1  -  ...  -  T3-B1-T1-B23-SI
 
 s-B23 and s-B1 lengths are fixed as 8 and 3 respectively for two reasons:
@@ -218,7 +233,8 @@ reg_exp_template = {'hydrophobic': ['A', 'F', 'I', 'L', 'M', 'V', 'W', 'Y'],
 
 regex_aa(reg_exp_template, parsed[1])
 
-regex_all_seg(parsed)
+
+reg_parsed = regex_all_seg(parsed)
 
     
 
@@ -250,8 +266,17 @@ print(ali)
 
 ##########################################################
 ## secondary structure prediction scores
+import words.txt
+
+pdb_1KTW
+
+f = open('PSIPRED Annotation/pdb_1TYU_PSIPRED Annotation.txt', 'r')
+content = f.read()
+print(content)
+len(content)
 
 
+np.genfromtxt(fname='PSIPRED Annotation/test.txt')
 
 
 ##########################################################
