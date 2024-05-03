@@ -32,9 +32,9 @@ from IPython import display
 import tensorflow as tf
 from tensorflow.python.framework.ops import reset_default_graph
 
-#import data
-import biRNN_CRF_master.utils
-import biRNN_CRF_master.custom_ops
+import biRNN_CRF_master.data as data
+import biRNN_CRF_master.utils as utils
+import biRNN_CRF_master.custom_ops as custom_ops
 import biRNN_CRF_master.conditional_random_fields as crf
 
 
@@ -72,7 +72,7 @@ def tensor_result(obj, shape_array):
 
 
 def chop_sequences(X, t, mask, length):
-    max_len = np.max(length)
+    max_len = int(np.floor(np.max(length) ))
     return X[:, :max_len], t[:, :max_len], mask[:, :max_len]
 
 
@@ -163,7 +163,7 @@ prediction = crf.log_marginal(nu_alp, nu_bet)
 
 
 rand_array = np.random.rand(1, 1, 1)
-tensor_result(nu_alp, rand_array)
+tensor_result(f, rand_array)
 
 
 
@@ -203,10 +203,33 @@ loss, accuracy, predictions = loss_and_acc()
 
 # use lobal step to keep track of our iterations
 global_step = tf.Variable(0, name='global_step', trainable=False)
+
 # pick optimizer, try momentum or adadelta
-optimizer = tf.train.AdamOptimizer(learning_rate)
+# replace tf.train.AdamOptimizer() with tf.optimizers.Adam()
+optimizer = tf.optimizers.Adam(learning_rate)
+
 # extract gradients for each variable
-grads_and_vars = optimizer.compute_gradients(loss)
+
+
+x = tf.constant(5.0)
+with tf.GradientTape() as g:
+  g.watch(x)
+  with tf.GradientTape() as gg:
+    gg.watch(x)
+    y = x * x
+  dy_dx = gg.gradient(y, x)  # dy_dx = 2 * x
+d2y_dx2 = g.gradient(dy_dx, x)  # d2y_dx2 = 2
+print(dy_dx)
+
+
+
+with tf.GradientTape() as g:
+    dy_dx = g.compute_gradients(loss, [f, g])
+    
+
+tf.GradientTape.gradient(loss, [f, g], )
+grads_and_vars = optimizer.compute_gradients(loss, var_list=[f, g], tape=tf.GradientTape(persistent=True))
+
 # add below for clipping by norm
 #gradients, variables = zip(*grads_and_vars)  # unzip list of tuples
 #clipped_gradients, global_norm = (
@@ -220,19 +243,43 @@ train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
 
 
+if X_train is None:
+    X_train, X_valid, t_train, t_valid, mask_train, mask_valid, length_train, length_valid, num_seq_train =\
+    data.get_train(seq_len)
+    X_valid, t_valid, mask_valid = chop_sequences(X_valid, t_valid, mask_valid, length_valid)
+    print("X_train,", X_train.shape, X_train.dtype)
+    print("t_train,", t_train.shape, t_train.dtype)
+    print("mask_train,", mask_train.shape, mask_train.dtype)
+    print("length_train,", length_train.shape, length_train.dtype)
+    print("num_seq_train", num_seq_train)
+    print("X_valid,", X_valid.shape, X_valid.dtype)
+    print("t_valid,", t_valid.shape, t_valid.dtype)
+    print("mask_valid,", mask_valid.shape, mask_valid.dtype)
+    print("length_valid,", length_valid.shape, length_valid.dtype)
+
+
+
 
 # restricting memory usage, TensorFlow is greedy and will use all memory otherwise
 gpu_opts = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.9)
 # initialize the Session
 sess = tf.compat.v1.Session(config = tf.compat.v1.ConfigProto(gpu_options=gpu_opts))
 
+
 # test train part
 sess.run(tf.compat.v1.global_variables_initializer())
 feed_dict = {X_input: X_valid, X_length: length_valid, t_input: t_valid,
              t_mask: mask_valid}
 fetches = [f, g, loss]
+
+
 res = sess.run(fetches=fetches, feed_dict=feed_dict)
-print "f", res[0].shape
+
+
+tensor_result(fetches, feed_dict)
+
+
+print("f", res[0].shape)
 print "g", res[1].shape
 #print "y_i", res[2][0].shape
 #print "y_plus", res[2][1].shape
