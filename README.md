@@ -22,7 +22,7 @@ with paper: https://dl.acm.org/doi/pdf/10.1145/3107411.3107489
 
 with data: https://github.com/LucaAngioloni/ProteinSecondaryStructure-CNN/blob/master/dataset.py
 
-           https://zenodo.org/records/7764556#.ZByi1ezMJvI
+https://zenodo.org/records/7764556#.ZByi1ezMJvI
 
 
 
