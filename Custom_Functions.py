@@ -18,6 +18,9 @@ from Bio import Align
     # https://biopython.org/docs/1.75/api/Bio.Seq.html
 from scipy.stats import laplace_asymmetric
 import numpy as np
+import sklearn_crfsuite
+from sklearn_crfsuite import metrics
+
 
 
 def all_equal(iterable):
@@ -95,7 +98,7 @@ def regex_aa(list_change, protein_seq):
     return protein_seq.upper()
 
 
-def parse_protein(protein, protein_ps, spacing, segmenting):
+def parse_protein(protein, protein_ps, iterations, segmenting):
     """
     For 4.1. Protein structural graph in the topic paper used for this analysis.
     
@@ -110,14 +113,17 @@ def parse_protein(protein, protein_ps, spacing, segmenting):
     
     fin_segments = {}
     fin_segments_ps = {}
-    for j in range(len(spacing)):
+    for j in range(iterations):
     
-        helix_len = segmenting["s-B23"] + segmenting["s-T3"][j] + segmenting["s-B1"] + segmenting["s-T1"][j]
-        num_helix = (len(protein) - 2*segmenting["s-I"]) // helix_len
+        helix_len = segmenting["s-B23"][j] + segmenting["s-T3"][j] + \
+                    segmenting["s-B1"] + segmenting["s-T1"][j]
+        num_helix = (len(protein) - (segmenting["start s-I"][j] + \
+                                     segmenting["end s-I"][j] ) ) // helix_len
     
     
         # split the remainder of non-helix for s-I at the start and end of the fold
-        first_sI = (len(protein) - (helix_len * num_helix)) // 2
+        #first_sI = (len(protein) - (helix_len * num_helix)) // 2
+        first_sI = segmenting["start s-I"][j]
         
         
         whole_segments = []
@@ -134,9 +140,9 @@ def parse_protein(protein, protein_ps, spacing, segmenting):
                 start = first_sI + 1
         
             
-            whole_segments.append(protein[start:start + segmenting["s-B23"]])
-            whole_segments_ps.append(protein_ps[start:start + segmenting["s-B23"]])
-            next_start = start + segmenting["s-B23"]
+            whole_segments.append(protein[start:start + segmenting["s-B23"][j] ])
+            whole_segments_ps.append(protein_ps[start:start + segmenting["s-B23"][j] ])
+            next_start = start + segmenting["s-B23"][j]
         
     
             whole_segments.append(protein[next_start:next_start + segmenting["s-T3"][j]])
@@ -201,25 +207,25 @@ def check_alignment(reg_exp_parsed, target_seq):
     paper used for this analysis.
     
     B2_T2_B2 = 'HXHXXIXHX':
-    The target sequence for B2-T2-B2 is 9 bp long. Segments of regex amino
-    acid sequences are separated into those that are [6, 10] bp long, to
+    The target sequence for B2-T2-B2 is 9 aa long. Segments of regex amino
+    acid sequences are separated into those that are [6, 10] aa long, to
     build in a little flexability for insertions and deletions. More
     tolerance for insertions than deletions.
     
     Match scores are then counted for [6, 9] matches and this is considered
     "match = 1". All other are classified as "match = 0". Again, this builds
-    tolerance for matches between 6 and at most 9 bp.
+    tolerance for matches between 6 and at most 9 aa.
     
     
     B1 = 'HXH':
-    The target sequence for B1 is 3 bp long. Segments of regex amino
-    acid sequences are separated into those that are [2, 5] bp long, to
+    The target sequence for B1 is 3 aa long. Segments of regex amino
+    acid sequences are separated into those that are [2, 5] aa long, to
     build in a little flexability for insertions and deletions. More
     tolerance for insertions than deletions.
     
     Match scores are then counted for [2, 3] matches and this is considered
     "match = 1". All other are classified as "match = 0". Again, this builds
-    tolerance for matches between 2 and at most 3 bp.
+    tolerance for matches between 2 and at most 3 aa.
     """
     B2_T2_B2 = 'HXHXXIXHX'
     B1 = 'HXH'
@@ -238,8 +244,8 @@ def check_alignment(reg_exp_parsed, target_seq):
         
         # get the alignment scores by the segment for the two possible regex expressions
         if target_seq == B2_T2_B2:
-            # the sequence must be at least 6 bp long, but we add flexibility
-            # for some variation up to 2 additional bp. This finds which
+            # the sequence must be at least 6 aa long, but we add flexibility
+            # for some variation up to 2 additional aa. This finds which
             # segments in a candidate parsing fits these parameters
             fit_len = [(y >= 6) & (y <= 10) for y in [len(x) for x in candidate_seg ]]
             list_el_fit = list(compress(candidate_seg, fit_len))
@@ -263,8 +269,8 @@ def check_alignment(reg_exp_parsed, target_seq):
             
             
         elif target_seq == B1:
-            # the sequence must be at least 3 bp long, but we add flexibility
-            # for some variation up to 2 additional bp. This finds which
+            # the sequence must be at least 3 aa long, but we add flexibility
+            # for some variation up to 2 additional aa. This finds which
             # segments in a candidate parsing fits these parameters
             fit_len = [(y >= 2) & (y <= 5) for y in [len(x) for x in candidate_seg ]]
             list_el_fit = list(compress(candidate_seg, fit_len))
@@ -294,21 +300,21 @@ def check_alignment(reg_exp_parsed, target_seq):
             seq_parsing = align_score[j]
             
             # strip the s-I head and tail sequence so that the index associated
-            # with s-T1 and s-T3 can be found by the predictable patern
+            # with s-T1 and s-T3 can be found by the predictable pattern
             fold_only = seq_parsing[1:len(seq_parsing)-1]
             freq = int(len(fold_only) / 4)
             
-            patern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq  
+            pattern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq  
             
             
             
             if target_seq == B2_T2_B2:
-                index = [i for i, x in enumerate(patern) if x == 's-B23']
-                anti_index = [i for i, x in enumerate(patern) if x != 's-B23']
+                index = [i for i, x in enumerate(pattern) if x == 's-B23']
+                anti_index = [i for i, x in enumerate(pattern) if x != 's-B23']
                 
             elif target_seq == B1:
-                index = [i for i, x in enumerate(patern) if x == 's-B1']  
-                anti_index = [i for i, x in enumerate(patern) if x != 's-B1']
+                index = [i for i, x in enumerate(pattern) if x == 's-B1']  
+                anti_index = [i for i, x in enumerate(pattern) if x != 's-B1']
                 
             
             in_set.append( sum( [seq_parsing[index[x]] for x in range(len(index))] ) )
@@ -388,12 +394,12 @@ def secondary_scores(psipred_seq, whole_ps_seq):
         
         
         # strip the s-I head and tail sequence so that the index associated
-        # with s-T1 and s-T3 can be found by the predictable patern
+        # with s-T1 and s-T3 can be found by the predictable pattern
         fold_only = segment[1:len(segment)-1]
         freq = int(len(fold_only) / 4)
         
-        unique_patern = ['s-B23', 's-T3', 's-B1', 's-T1']
-        patern = unique_patern * freq
+        unique_pattern = ['s-B23', 's-T3', 's-B1', 's-T1']
+        pattern = unique_pattern * freq
         
         
         cal_mean = []
@@ -403,8 +409,8 @@ def secondary_scores(psipred_seq, whole_ps_seq):
         # add the folding region
         cal_mean.append([ round(x / sum(length_seg), 3) for x in [sum(helix_seg), sum(sheet_seg), sum(coil_seg)] ])
         
-        for j in range(len(unique_patern)):
-            index = [i for i, x in enumerate(patern) if x == unique_patern[j] ]
+        for j in range(len(unique_pattern)):
+            index = [i for i, x in enumerate(pattern) if x == unique_pattern[j] ]
     
             denoinator = sum( [ length_seg[index[x]] for x in range(len(index))] )
             hel_num = sum( [ helix_seg[index[x]] for x in range(len(index))] )
@@ -414,7 +420,7 @@ def secondary_scores(psipred_seq, whole_ps_seq):
             cal_mean.append([ round(x / denoinator, 3) for x in [hel_num, she_num, coi_num] ])
         
         # for each candidate segmentation, the mean helix, sheet, and coil is 
-        # calculated for the ['whole seq', 's-B23', 's-T3', 's-B1', 's-T1'] paterns.
+        # calculated for the ['whole seq', 's-B23', 's-T3', 's-B1', 's-T1'] patterns.
         results.append(cal_mean)
         
         
@@ -441,14 +447,14 @@ def laplace_prob(sequence):
         seq_parsing = sequence[i]
         
         # strip the s-I head and tail sequence so that the index associated
-        # with s-T1 and s-T3 can be found by the predictable patern
+        # with s-T1 and s-T3 can be found by the predictable pattern
         fold_only = seq_parsing[1:len(seq_parsing)-1]
         freq = int(len(fold_only) / 4)
         
-        patern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq    
+        pattern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq    
         
-        index_T3 = [i for i, x in enumerate(patern) if x == 's-T3']
-        index_T1 = [i for i, x in enumerate(patern) if x == 's-T1']
+        index_T3 = [i for i, x in enumerate(pattern) if x == 's-T3']
+        index_T1 = [i for i, x in enumerate(pattern) if x == 's-T1']
         
         
         T1_score = []
@@ -464,11 +470,14 @@ def laplace_prob(sequence):
         # all spacings within one candidate segmentation should be the same. This
         # checks that that assumption is true.
         if (all_equal(T1_score) == True) and (all_equal(T3_score) == True):
-            T1_all.append(T1_score[0])
-            T3_all.append(T3_score[0])
+            T1_all.append( '{:0.3e}'.format(T1_score[0]) )
+            T3_all.append( '{:0.3e}'.format(T3_score[0]) )
             
         else:
-            return print('segmentation spacing is not all equal within a parsing')
+            T1_all.append( '{:0.3e}'.format(np.mean(T1_score)) )
+            T3_all.append( '{:0.3e}'.format(np.mean(T3_score)) )
+            
+            print('segmentation spacing is not all equal within a parsing')
         
     return T1_all, T3_all
 
@@ -490,15 +499,15 @@ def dist_B23(sequence):
         seq_parsing = sequence[i]
         
         # strip the s-I head and tail sequence so that the index associated
-        # with s-T1 and s-T3 can be found by the predictable patern
+        # with s-T1 and s-T3 can be found by the predictable pattern
         fold_only = seq_parsing[1:len(seq_parsing)-1]
         freq = int(len(fold_only) / 4)
         
-        patern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq    
+        pattern = ['s-B23', 's-T3', 's-B1', 's-T1'] * freq    
         
         
-        index_T3 = [i for i, x in enumerate(patern) if x == 's-T3']
-        index_T1 = [i for i, x in enumerate(patern) if x == 's-T1']
+        index_T3 = [i for i, x in enumerate(pattern) if x == 's-T3']
+        index_T1 = [i for i, x in enumerate(pattern) if x == 's-T1']
         
         distance = []
         for j in range(freq):
@@ -516,9 +525,48 @@ def dist_B23(sequence):
         mu = np.mean( all_spacing )
         sigma = np.std( all_spacing )
         
-        return [round((x - mu)/sigma, 3) for x in all_spacing]
+        return [round((x - mu)/sigma, 3) for x in all_spacing], \
+               round(mu, 3), round(sigma, 3)
         
         
     else:
-        return print('segmentation spacing is not all equal within a parsing')
+        all_spacing = np.mean( seg_dist )
+        
+        mu = 0
+        sigma = 0
+        
+        #print('segmentation spacing is not all equal within a parsing')
+        
+        return [round(all_spacing, 3)], None, None
+
+
+
+def crf_match(y_test, y_pred, num_proteins, num_iterations):
+    """
+    Used to parse the match metric in the CRF calculation by the
+    protein type and segment
+    """
+    
+    match_by_segment = []
+    match_by_protein = []
+    for i in range(num_proteins):
+        range_update = [ x + (num_iterations * range(num_proteins)[i]) for x in (0, num_iterations) ]
+        
+        given = y_test[range_update[0]:range_update[1]]
+        guess = y_pred[range_update[0]:range_update[1]]
+        
+        seq_dicts = {}
+        for j in range(len(given)):
+            given_seq = given[i]
+            guess_seq = given[i]
+        
+            seq_dicts[j] = metrics.flat_f1_score(given_seq, guess_seq, average='weighted')
+        
+        
+        match_by_segment.append(seq_dicts)
+        match_by_protein.append(metrics.flat_f1_score(given, guess, average='weighted'))
+
+    return match_by_protein, match_by_segment
+
+
 
