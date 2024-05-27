@@ -101,6 +101,8 @@ def sent2tokens(sent):
 
 
 sent2features(train_sents[0])[0]
+sent2labels(train_sents[0])[0]
+sent2tokens(train_sents[0])[0]
 
 
 
@@ -112,6 +114,8 @@ y_train = [sent2labels(s) for s in train_sents]
 
 X_test = [sent2features(s) for s in test_sents]
 y_test = [sent2labels(s) for s in test_sents]
+
+
 
 
 crf = sklearn_crfsuite.CRF(
